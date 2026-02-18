@@ -12,7 +12,7 @@ exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 st.title("🚦 AV Competitor Intelligence Dashboard")
 
 # Competitor Selection
-company = st.selectbox("Select Target Company", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
+company = st.selectbox("Select Target Company", ["May Mobility", "Motional", "Tesla", "Waymo", "Zoox"])
 
 if st.button(f"Generate {company} Report"):
     with st.spinner("Searching for latest AV news and metrics..."):
