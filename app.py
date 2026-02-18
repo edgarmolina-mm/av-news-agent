@@ -1,68 +1,64 @@
 import streamlit as st
 from google import genai
 from exa_py import Exa
-import pandas as pd
+import time
+from fpdf import FPDF, XPos, YPos
 
-# 1. Page Config & Theme
-st.set_page_config(page_title="AV Intel 2026", layout="wide", page_icon="🚗")
+# 1. Page & Client Setup
+st.set_page_config(page_title="AV Intel Tracker", layout="wide")
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 
-# 2. Initialize Clients (Using Streamlit Secrets)
-# When deploying, you'll add these to the Streamlit Cloud dashboard
-GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
-EXA_KEY = st.secrets["EXA_API_KEY"]
+# 2. Initialize Session State (This is your "Session Memory")
+if "last_report" not in st.session_state:
+    st.session_state.last_report = None
 
-client = genai.Client(api_key=GEMINI_KEY)
-exa = Exa(api_key=EXA_KEY)
+# 3. Cached Report Generation (This is your "Disk Memory")
+@st.cache_data(persist="disk", show_spinner=False)
+def generate_cached_report(company):
+    # Fetch data
+    search = exa.search(
+        f"latest {company} L4 autonomous driving advancements Feb 2026",
+        num_results=2,
+        type="auto",
+        contents={"summary": True}
+    )
+    
+    # Process with Gemini
+    context = "\n".join([f"Source: {r.url}\nSummary: {r.summary}" for r in search.results])
+    prompt = f"Provide a high-level 2026 update for {company} based on: {context}. Use no emojis."
+    
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-lite",
+        contents=prompt
+    )
+    return {"text": response.text, "sources": [r.url for r in search.results]}
 
-# 3. Sidebar Setup
-st.sidebar.title("Competitor Intel")
-st.sidebar.info("Real-time L4 advancements for Feb 2026.")
-competitor = st.sidebar.selectbox(
-    "Select Company", 
-    ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"]
-)
+# --- UI LAYOUT ---
+st.title("🚦 L4 Competitor Intelligence")
 
-# 4. Main Dashboard Logic
-st.title(f"🚀 {competitor} Intelligence Brief")
-st.caption(f"Last updated: February 18, 2026")
+company = st.selectbox("Select Competitor", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
 
-if st.button("Generate Latest Report"):
-    with st.spinner(f"Scanning 90-day data for {competitor}..."):
-        try:
-            # Neural Search via Exa
-            search = exa.search(
-                f"latest {competitor} L4 autonomous driving city launch partnership Feb 2026",
-                num_results=3,
-                type="auto",
-                start_published_date="2025-11-20",
-                contents={"summary": True}
-            )
+if st.button(f"Generate New {company} Report"):
+    with st.spinner("Analyzing market data..."):
+        report_data = generate_cached_report(company)
+        st.session_state.last_report = report_data
+        st.session_state.current_company = company
 
-            # Summarization via Gemini
-            raw_data = "\n".join([f"Source: {r.url}\nSummary: {r.summary}" for r in search.results])
-            prompt = f"Analyze these news summaries for {competitor}. Extract a 'Bottom Line' and any specific 2026 metrics.\n\n{raw_data}"
-            
-            response = client.models.generate_content(
-                model="gemini-2.0-flash-lite",
-                contents=prompt
-            )
+# --- DISPLAY LAST REPORT ---
+if st.session_state.last_report:
+    st.divider()
+    st.subheader(f"Latest Intelligence: {st.session_state.get('current_company', '')}")
+    st.markdown(st.session_state.last_report["text"])
+    
+    with st.expander("View Sources"):
+        for url in st.session_state.last_report["sources"]:
+            st.write(url)
 
-            # Display Layout
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.subheader("Executive Summary")
-                st.markdown(response.text)
-                
-                st.subheader("Top Recent Sources")
-                for r in search.results:
-                    st.markdown(f"- [{r.url}]({r.url})")
-
-            with col2:
-                st.subheader("Key 2026 Indicators")
-                # Example hardcoded context for 2026 (or you can ask Gemini to extract these)
-                st.info("Market Sentiment: **Bullish**")
-                st.warning("Regulatory Status: **Active Inquiry**")
-
-        except Exception as e:
-            st.error(f"Error fetching data: {e}")
+    # 4. PDF Export Logic (In-memory for download)
+    def create_pdf(text):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("helvetica", size=12)
+        pdf.multi_cell(0, 10, text)
+        return pdf
