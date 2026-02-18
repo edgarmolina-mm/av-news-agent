@@ -1,64 +1,95 @@
 import streamlit as st
 from google import genai
 from exa_py import Exa
-import time
 from fpdf import FPDF, XPos, YPos
+import re
+from datetime import datetime
 
-# 1. Page & Client Setup
-st.set_page_config(page_title="AV Intel Tracker", layout="wide")
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-exa = Exa(api_key=st.secrets["EXA_API_KEY"])
+# 1. Setup & Secrets
+st.set_page_config(page_title="AV Intel 2026", layout="wide", page_icon="🚗")
 
-# 2. Initialize Session State (This is your "Session Memory")
-if "last_report" not in st.session_state:
-    st.session_state.last_report = None
+# Use st.secrets for permanent deployment; otherwise, hardcode for local testing
+GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", "YOUR_KEY_HERE")
+EXA_KEY = st.secrets.get("EXA_API_KEY", "YOUR_KEY_HERE")
 
-# 3. Cached Report Generation (This is your "Disk Memory")
-@st.cache_data(persist="disk", show_spinner=False)
-def generate_cached_report(company):
-    # Fetch data
-    search = exa.search(
-        f"latest {company} L4 autonomous driving advancements Feb 2026",
-        num_results=2,
-        type="auto",
-        contents={"summary": True}
-    )
+client = genai.Client(api_key=GEMINI_KEY)
+exa = Exa(api_key=EXA_KEY)
+
+# 2. Session State to save the last report
+if "report" not in st.session_state:
+    st.session_state.report = None
+    st.session_state.company = ""
+
+# 3. Helper: Clean text for PDF (Remove Emojis)
+def clean_for_pdf(text):
+    return re.sub(r'[^\x00-\x7F]+', '', text)
+
+# 4. Helper: Create PDF
+def create_pdf(content, company):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, f"{company} Intelligence Brief - 2026", 
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+    pdf.ln(5)
+    pdf.set_font("helvetica", size=12)
+    pdf.multi_cell(0, 10, clean_for_pdf(content), markdown=True)
+    return pdf.output()
+
+# --- UI Sidebar ---
+st.sidebar.title("Competitor Intel")
+target = st.sidebar.selectbox("Choose Competitor", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
+
+if st.sidebar.button(f"Generate {target} Report"):
+    with st.spinner(f"Analyzing {target} market signals..."):
+        try:
+            # Search last 90 days
+            search = exa.search(
+                f"latest {target} L4 autonomous driving advancement Feb 2026",
+                num_results=3,
+                type="auto",
+                start_published_date="2025-11-20",
+                contents={"summary": True}
+            )
+            
+            # Synthesize with Gemini
+            context = "\n".join([f"Source: {r.url}\nSummary: {r.summary}" for r in search.results])
+            prompt = f"Analyze these news items for {target}. Extract key 2026 milestones. Be concise.\n\n{context}"
+            
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-lite",
+                contents=prompt
+            )
+            
+            # Save to Session State
+            st.session_state.report = response.text
+            st.session_state.company = target
+            st.session_state.sources = [r.url for r in search.results]
+        except Exception as e:
+            st.error(f"Limit reached or API Error: {e}")
+
+# --- Main Dashboard Display ---
+if st.session_state.report:
+    st.title(f"🚀 {st.session_state.company} Status")
     
-    # Process with Gemini
-    context = "\n".join([f"Source: {r.url}\nSummary: {r.summary}" for r in search.results])
-    prompt = f"Provide a high-level 2026 update for {company} based on: {context}. Use no emojis."
+    col1, col2 = st.columns([3, 1])
     
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
-        contents=prompt
-    )
-    return {"text": response.text, "sources": [r.url for r in search.results]}
-
-# --- UI LAYOUT ---
-st.title("🚦 L4 Competitor Intelligence")
-
-company = st.selectbox("Select Competitor", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
-
-if st.button(f"Generate New {company} Report"):
-    with st.spinner("Analyzing market data..."):
-        report_data = generate_cached_report(company)
-        st.session_state.last_report = report_data
-        st.session_state.current_company = company
-
-# --- DISPLAY LAST REPORT ---
-if st.session_state.last_report:
-    st.divider()
-    st.subheader(f"Latest Intelligence: {st.session_state.get('current_company', '')}")
-    st.markdown(st.session_state.last_report["text"])
-    
-    with st.expander("View Sources"):
-        for url in st.session_state.last_report["sources"]:
-            st.write(url)
-
-    # 4. PDF Export Logic (In-memory for download)
-    def create_pdf(text):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("helvetica", size=12)
-        pdf.multi_cell(0, 10, text)
-        return pdf
+    with col1:
+        st.markdown(st.session_state.report)
+        
+    with col2:
+        st.subheader("Reference Links")
+        for url in st.session_state.sources:
+            st.caption(url)
+        
+        # Download Section
+        pdf_data = create_pdf(st.session_state.report, st.session_state.company)
+        st.download_button(
+            label="📄 Export as PDF",
+            data=bytes(pdf_data),
+            file_name=f"{st.session_state.company}_Intel_2026.pdf",
+            mime="application/pdf"
+        )
+else:
+    st.header("Select a competitor to begin.")
+    st.info("The dashboard will persist your last generated report in this session.")
