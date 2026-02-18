@@ -3,33 +3,55 @@ from google import genai
 from exa_py import Exa
 from datetime import datetime, timedelta
 
-# 1. Clean Layout Setup
-st.set_page_config(page_title="AV Intel 2026", layout="wide", page_icon="📡")
+# 1. Page & Layout Configuration
+st.set_page_config(page_title="AV Intel Pulse 2026", layout="wide", page_icon="📡")
 
-# Professional Dashboard Styling
+# Professional Styling for rapid scanning
 st.html("""
     <style>
     .main { background-color: #f4f7f6; }
     .stMetric { background-color: #ffffff; border-radius: 10px; border: 1px solid #e1e4e8; padding: 20px; }
+    .report-card { background-color: #ffffff; padding: 25px; border-radius: 12px; border-left: 5px solid #2e7d32; }
     </style>
 """)
 
-# Secure Client Initialization
+# 2. Secure Client Initialization
 try:
+    # Always use st.secrets for production security
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
     exa = Exa(api_key=st.secrets["EXA_API_KEY"])
-except Exception as e:
-    st.error("API Keys missing in Secrets!")
+except Exception:
+    st.error("⚠️ API Keys missing! Add them in Settings > Secrets.")
     st.stop()
 
-# 2. Sidebar - Essential Controls
+# Persistent State Management
+if "intel_data" not in st.session_state:
+    st.session_state.intel_data = None
+    st.session_state.active_co = ""
+    st.session_state.source_urls = []
+
+# --- SIDEBAR: CONTROLS ---
 st.sidebar.title("AV Intelligence Hub")
 st.sidebar.caption(f"Market Snapshot: {datetime.now().strftime('%B %d, %Y')}")
 target = st.sidebar.selectbox("Select Target", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
-run_btn = st.sidebar.button(f"Scan {target} Momentum")
 
-if run_btn:
-    with st.spinner(f"Synthesizing latest news for {target}..."):
+if st.sidebar.button(f"Scan {target} Momentum"):
+    with st.spinner(f"Synthesizing 60 days of {target} data..."):
         try:
-            # 3. Dynamic 60-Day Lookback
-            look
+            # Dynamic 60-day lookback for fresh 2026 data
+            lookback = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d')
+            
+            # Precision query to isolate target specific news
+            query = f"latest commercial L4 advancements, fleet metrics, and news for {target} 2026"
+            
+            search = exa.search(
+                query,
+                num_results=5, 
+                type="auto",
+                category="news",
+                start_published_date=lookback,
+                contents={"text": True}
+            )
+            
+            if not search.results:
+                st.warning(f"No recent news found for {target} since {lookback}.")
