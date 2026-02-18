@@ -1,4 +1,4 @@
-google-genai>=1.0.0
-exa-py>=1.0.0
-streamlit>=1.54.0
-fpdf2>=2.8.6
+google-genai
+exa-py
+fpdf2
+streamlit
