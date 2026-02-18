@@ -5,25 +5,33 @@ from fpdf import FPDF, XPos, YPos
 import re
 from datetime import datetime
 
-# 1. Page & Client Configuration
+# 1. Page Configuration
 st.set_page_config(page_title="AV Pulse 2026", layout="wide", page_icon="📈")
 
-# Standard styling for better readability
-st.markdown("""
+# 2. Modern CSS (Updated for Streamlit 1.54+)
+st.html("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; border-radius: 10px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .main { background-color: #fcfcfc; }
+    .stMetric { 
+        background-color: #ffffff; 
+        border: 1px solid #eee;
+        border-radius: 12px; 
+        padding: 20px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02); 
+    }
+    h1, h2, h3 { color: #1e1e1e; }
     </style>
-    """, unsafe_allow_name_with_html=True)
+    """)
 
+# 3. Secure API Initialization
 try:
     client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
     exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 except Exception as e:
-    st.error("Missing API Keys in Settings > Secrets!")
+    st.error("⚠️ API Keys missing! Add them in Settings > Secrets.")
     st.stop()
 
-# Persistent session state
+# Persistent State
 if "raw_report" not in st.session_state:
     st.session_state.raw_report = None
     st.session_state.active_co = ""
@@ -33,18 +41,21 @@ def pdf_clean(text):
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
 # --- SIDEBAR CONTROL ---
-st.sidebar.title("Intelligence Hub")
-st.sidebar.markdown("Get a real-time pulse on the AV market.")
-target = st.sidebar.selectbox("Choose Competitor", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
+st.sidebar.title("Market Pulse")
+st.sidebar.caption("L4 Intelligence • Feb 18, 2026")
+target = st.sidebar.selectbox("Select Competitor", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
 
-if st.sidebar.button(f"Scan {target} Momentum"):
-    with st.spinner(f"Reading latest {target} signals..."):
+if st.sidebar.button(f"Generate {target} Briefing"):
+    with st.spinner(f"Scanning market for {target}..."):
         try:
-            # 2. Precision Search: Filters out general industry noise
-            query = f"site:maymobility.com OR '{target}' commercial driverless operations city expansion Feb 2026" if target == "May Mobility" else f"latest {target} L4 autonomous driving metrics Feb 2026"
+            # 4. Precision Search Query
+            # Using site: and quotes to ensure target exclusivity
+            search_query = f"'{target}' autonomous driving latest commercial updates metrics February 2026"
+            if target == "May Mobility":
+                search_query = "site:maymobility.com OR 'May Mobility' driverless Peachtree Corners news 2026"
             
             search = exa.search(
-                query,
+                search_query,
                 num_results=3, 
                 type="auto", 
                 category="news",
@@ -52,24 +63,25 @@ if st.sidebar.button(f"Scan {target} Momentum"):
                 contents={"summary": True}
             )
             
-            # 3. User-Friendly Prompt: Executive Summary + Key Wins
+            # 5. User-Friendly AI Prompt
             prompt = f"""
-            Act as a Competitive Intelligence Specialist. Summarize the status of {target} for a new user.
+            Act as a Lead AV Analyst. Summarize the status of {target} for a new user based ONLY on the provided data.
+            DO NOT mention Waymo or Tesla unless the data is explicitly about a partnership with them.
             
-            Structure your response as follows:
+            Format as:
             ### 🏁 The Bottom Line
-            (A 2-sentence summary of where they stand right now)
+            (Short summary of today's status)
             
-            ### 🚀 Recent Wins & Milestones
-            (Bullet points of the most important news from the data)
+            ### 🚀 Recent Milestones
+            (Key news from 2026)
             
-            ### 📍 Where they are driving
-            (Specific cities or launch zones mentioned)
+            ### 📍 Active Footprint
+            (Cities or zones mentioned)
             
-            ### ⚠️ Current Challenges
-            (Any regulatory issues, competition, or technical hurdles)
+            ### ⚠️ Market Context
+            (Risks or competition focus)
             
-            DATA SOURCES:
+            DATA:
             {chr(10).join([f"Source: {r.url} Summary: {r.summary}" for r in search.results])}
             """
             
@@ -79,53 +91,45 @@ if st.sidebar.button(f"Scan {target} Momentum"):
             st.session_state.source_list = [r.url for r in search.results]
                 
         except Exception as e:
-            st.error(f"Search failed: {e}")
+            st.error(f"Scan failed: {e}")
 
 # --- MAIN DASHBOARD ---
 if st.session_state.raw_report:
-    st.title(f"Competitive Pulse: {st.session_state.active_co}")
+    st.title(f"{st.session_state.active_co} Status Report")
     
-    # 4. Impact Metrics (Simplified for new users)
+    # 6. Strategic Metrics Row
     m1, m2, m3 = st.columns(3)
     with m1:
-        st.metric("Primary Focus", "Mass-Market" if target == "Tesla" else "Ride-Hail")
+        st.metric("Primary Lane", "Robotaxi" if target != "Tesla" else "Personal FSD")
     with m2:
-        st.metric("2026 Momentum", "Expanding" if target in ["Waymo", "Zoox", "May Mobility"] else "Consolidating")
+        st.metric("2026 Trajectory", "Scaling" if target in ["Waymo", "Zoox"] else "Deploying")
     with m3:
-        # Dynamic Risk Assessment based on recent headlines
-        st.metric("Risk Level", "Medium" if "investigation" in st.session_state.raw_report.lower() else "Low")
+        risk = "Moderate" if "regulation" in st.session_state.raw_report.lower() else "Low"
+        st.metric("Risk Profile", risk)
     
     st.divider()
 
-    # 5. Display the Digestible Report
     st.markdown(st.session_state.raw_report)
     
-    # Research Expander
-    with st.expander("🔗 View Original Sources"):
-        for link in st.session_state.source_list:
-            st.write(f"- {link}")
+    # Research Sources (No Variable Shadowing Fix)
+    with st.expander("🔗 View Evidence Base"):
+        for url_link in st.session_state.source_list:
+            st.write(url_link)
 
-    # Simplified PDF Export
+    # Professional PDF Export
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, f"{st.session_state.active_co} Intel - Feb 2026", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        pdf.cell(0, 10, f"{st.session_state.active_co} Intelligence Brief", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
         pdf.ln(5)
         pdf.set_font("helvetica", size=11)
         pdf.multi_cell(0, 10, pdf_clean(st.session_state.raw_report), markdown=True)
         
-        st.download_button("📥 Save this Brief as PDF", data=bytes(pdf.output()), 
-                           file_name=f"{st.session_state.active_co}_Pulse.pdf")
+        st.download_button("📥 Save Report as PDF", data=bytes(pdf.output()), 
+                           file_name=f"{st.session_state.active_co}_Brief_Feb2026.pdf")
     except Exception as pdf_err:
-        st.error(f"PDF Error: {pdf_err}")
+        st.warning(f"PDF unavailable: {pdf_err}")
 else:
-    st.header("Welcome to the 2026 AV Tracker")
-    st.write("👈 Select a company from the sidebar to get a 2-minute intelligence briefing.")
-    
-    # Educational Tip for New Users
-    st.info("""
-    **Did you know?** In early 2026, the AV market has split into two lanes:
-    - **Waymo & Zoox:** Scaling 'Driverless Pods' in major urban hubs.
-    - **Tesla:** Focusing on the 'Cybercab' for personal ownership and fleet use.
-    """)
+    st.header("AV Market Intelligence")
+    st.info("Select a competitor to see their 2026 progress.")
