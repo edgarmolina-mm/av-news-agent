@@ -1,57 +1,42 @@
 import streamlit as st
 from google import genai
 from exa_py import Exa
-from datetime import datetime
 
-# 1. Page Configuration
-st.set_page_config(page_title="AV Intel Pulse 2026", layout="wide", page_icon="📡")
+# Page Config
+st.set_page_config(page_title="AV Intel Tracker", layout="wide")
 
-# 2. Precision CSS for "Longest Name" Width
-st.markdown("""
-    <style>
-    /* Force buttons to only be as wide as their text content */
-    div.stButton > button {
-        width: max-content !important;
-        min-width: 0px !important;
-        padding-left: 20px !important;
-        padding-right: 20px !important;
-    }
-    
-    .main { background-color: #f4f7f6; }
-    .report-card { 
-        background-color: #ffffff; 
-        padding: 25px; 
-        border-radius: 12px; 
-        border-left: 5px solid #2e7d32;
-        margin-top: 10px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Initialize Clients
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 
-# ... (Client initialization remains same) ...
+st.title("🚦 L4 Competitor Intelligence Dashboard")
 
-# --- SIDEBAR: CONTROLS ---
-st.sidebar.title("AV Intelligence Hub")
-target_list = ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"]
-target = st.sidebar.selectbox("Select Target", target_list)
+# Competitor Selection
+company = st.selectbox("Select Target Company", ["Waymo", "Tesla", "Zoox", "Motional"])
 
-# The button label now dynamically reflects the selected company
-button_label = f"Pull {target} Intel"
+if st.button(f"Generate {company} Report"):
+    with st.spinner("Searching for latest L4 news and metrics..."):
+        # 1. Search for News and Metrics via Exa
+        search_result = exa.search(
+            f"Latest L4 autonomous driving updates for {company} including city launches, fleet size, and funding as of Feb 2026",
+            num_results=3,
+            type="auto",
+            contents={"summary": True} # Getting summaries directly from Exa
+        )
 
-if st.sidebar.button(button_label, width="content"): # Set width to content
-    with st.spinner(f"Accessing 2026 news wires for {target}..."):
-        # ... (Search and synthesis logic remains same) ...
-        try:
-            # (Fetching data and generating content as before)
-            pass
-        except Exception as e:
-            st.error(f"Sync failed: {str(e)}")
+        # 2. Synthesize with Gemini
+        context = "\n".join([f"Source: {r.url}\nSummary: {r.summary}" for r in search_result.results])
+        prompt = f"Using this data: {context}, provide a technical summary of {company}'s current L4 status. Include a bulleted list of city launches and key metrics (fleet size, capital)."
+        
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-lite", # High-speed model for 2026
+            contents=prompt
+        )
 
-# --- MAIN DASHBOARD DISPLAY ---
-if st.session_state.get("intel_data"):
-    # (Dashboard rendering logic remains same)
-    st.title(f"Competitive Pulse: {st.session_state.active_co}")
-    # ...
-else:
-    st.header("Autonomous Mobility Intelligence")
-    st.info("Select a competitor to see the Feb 18, 2026 market update.")
+        # 3. Display Results
+        st.subheader(f"Current Status: {company}")
+        st.markdown(response.text)
+        
+        with st.expander("View Source Links"):
+            for res in search_result.results:
+                st.write(res.url)
