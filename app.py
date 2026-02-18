@@ -9,13 +9,13 @@ st.set_page_config(page_title="AV Intel Tracker", layout="wide")
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 
-st.title("🚦 L4 Competitor Intelligence Dashboard")
+st.title(" 🚙 AV Competitor Intelligence Dashboard")
 
 # Competitor Selection
-company = st.selectbox("Select Target Company", ["Waymo", "Tesla", "Zoox", "Motional"])
+company = st.selectbox("Select Target Company", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
 
 if st.button(f"Generate {company} Report"):
-    with st.spinner("Searching for latest L4 news and metrics..."):
+    with st.spinner("Searching for latest news and metrics..."):
         # 1. Search for News and Metrics via Exa
         search_result = exa.search(
             f"Latest L4 autonomous driving updates for {company} including city launches, fleet size, and funding as of Feb 2026",
