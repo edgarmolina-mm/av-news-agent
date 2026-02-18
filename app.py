@@ -9,7 +9,7 @@ st.set_page_config(page_title="AV Intel Tracker", layout="wide")
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 exa = Exa(api_key=st.secrets["EXA_API_KEY"])
 
-st.title(" 🚙 AV Competitor Intelligence Dashboard")
+st.title(" 🚙  AV Competitor Intelligence Dashboard")
 
 # Competitor Selection
 company = st.selectbox("Select Target Company", ["Waymo", "Tesla", "Zoox", "Motional", "May Mobility"])
